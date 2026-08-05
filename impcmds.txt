@@ -1,0 +1,13 @@
+If venv not present
+
+python -m venv venv
+
+.\venv\Scripts\activate
+
+pip install -r requirements.txt
+
+
+# open New Terminal
+docker run -d --name redis-stack -p 6379:6379 redis:latest
+
+

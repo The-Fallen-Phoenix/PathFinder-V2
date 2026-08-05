@@ -119,6 +119,37 @@ def update_company_status(company_id):
         return jsonify({'message': 'Status updated'}), 200
     return jsonify({'message': 'Company not found'}), 404
 
+@api_bp.route('/admin/students', methods=['GET'])
+@jwt_required()
+def get_students():
+    current_user = get_jwt_identity()
+    if current_user['role'] != 'admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+    students = StudentProfile.query.all()
+    res = [{
+        'id': s.id,
+        'full_name': s.full_name,
+        'roll_no': s.roll_no,
+        'branch': s.branch,
+        'cgpa': s.cgpa,
+        'status': s.user.status
+    } for s in students]
+    return jsonify(res), 200
+
+@api_bp.route('/admin/students/<int:student_id>/status', methods=['PUT'])
+@jwt_required()
+def update_student_status(student_id):
+    current_user = get_jwt_identity()
+    if current_user['role'] != 'admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+    data = request.get_json()
+    student = StudentProfile.query.get(student_id)
+    if student:
+        student.user.status = data['status']
+        db.session.commit()
+        return jsonify({'message': 'Student status updated'}), 200
+    return jsonify({'message': 'Student not found'}), 404
+
 @api_bp.route('/admin/drives', methods=['GET'])
 @jwt_required()
 def get_all_drives():
@@ -162,6 +193,9 @@ def company_drives():
     company = CompanyProfile.query.filter_by(user_id=current_user['id']).first()
     
     if request.method == 'POST':
+        if company.user.status != 'approved':
+            return jsonify({'message': 'Cannot create drives unless your profile is approved by Admin.'}), 403
+
         data = request.get_json()
         deadline = datetime.strptime(data['deadline'], '%Y-%m-%d')
         new_drive = PlacementDrive(
@@ -210,7 +244,8 @@ def company_drive_applications(drive_id):
         'branch': a.student.branch,
         'cgpa': a.student.cgpa,
         'status': a.status,
-        'applied_on': a.applied_on.strftime('%Y-%m-%d')
+        'applied_on': a.applied_on.strftime('%Y-%m-%d'),
+        'resume_link': a.student.resume_link
     } for a in apps]
     return jsonify(res), 200
 
@@ -232,10 +267,72 @@ def update_application_status(app_id):
             return jsonify({'message': 'Application status updated'}), 200
     return jsonify({'message': 'Application not found'}), 404
 
+@api_bp.route('/company/applications/<int:app_id>/offer_letter', methods=['GET'])
+@jwt_required()
+def generate_offer_letter(app_id):
+    current_user = get_jwt_identity()
+    if current_user['role'] != 'company':
+        return "Unauthorized", 403
+        
+    app = Application.query.get(app_id)
+    if not app or app.status != 'selected':
+        return "Application not selected or not found", 404
+        
+    company = CompanyProfile.query.filter_by(user_id=current_user['id']).first()
+    if app.drive.company_id != company.id:
+        return "Unauthorized", 403
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Offer Letter - {app.student.full_name}</title>
+        <style>
+            body {{ font-family: 'Times New Roman', serif; padding: 50px; line-height: 1.6; color: #333; }}
+            .header {{ text-align: center; border-bottom: 2px solid #0d4c94fb; padding-bottom: 20px; margin-bottom: 30px; }}
+            .company-name {{ font-size: 28px; font-weight: bold; color: #0d4c94fb; }}
+            .date {{ text-align: right; margin-bottom: 30px; }}
+            .content {{ margin-bottom: 50px; }}
+            .footer {{ border-top: 1px solid #ccc; padding-top: 20px; text-align: center; font-size: 14px; color: #777; }}
+            .signature {{ margin-top: 50px; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="company-name">{company.company_name}</div>
+            <div>{company.website if company.website else 'Official Placement Offer'}</div>
+        </div>
+        
+        <div class="date">Date: {datetime.now().strftime('%B %d, %Y')}</div>
+        
+        <div class="content">
+            <p>Dear <strong>{app.student.full_name}</strong> (Roll No: {app.student.roll_no}),</p>
+            
+            <p>We are delighted to extend this formal offer of employment for the position of <strong>{app.drive.job_title}</strong> at {company.company_name}.</p>
+            
+            <p>Following your successful performance during our recent placement drive on the campus, we were very impressed by your skills, background, and attitude. We believe that your academic background in <strong>{app.student.branch}</strong> makes you a perfect fit for our team.</p>
+            
+            <p>Please review this offer letter and sign below to indicate your acceptance. We look forward to welcoming you aboard!</p>
+        </div>
+        
+        <div class="signature">
+            <p>Sincerely,</p>
+            <p><strong>{company.hr_contact}</strong></p>
+            <p>HR Department, {company.company_name}</p>
+        </div>
+        
+        <div class="footer">
+            Generated by PathFinder Placement Portal
+        </div>
+    </body>
+    </html>
+    """
+    return html_content, 200
+
 
 # --- Student APIs ---
 
-@api_bp.route('/student/profile', methods=['GET'])
+@api_bp.route('/student/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def student_profile():
     current_user = get_jwt_identity()
@@ -243,12 +340,23 @@ def student_profile():
         return jsonify({'message': 'Unauthorized'}), 403
         
     student = StudentProfile.query.filter_by(user_id=current_user['id']).first()
+    
+    if request.method == 'PUT':
+        data = request.get_json()
+        student.full_name = data.get('full_name', student.full_name)
+        student.branch = data.get('branch', student.branch)
+        student.cgpa = float(data.get('cgpa', student.cgpa))
+        student.resume_link = data.get('resume_link', student.resume_link)
+        db.session.commit()
+        return jsonify({'message': 'Profile updated successfully'}), 200
+
     return jsonify({
         'full_name': student.full_name,
         'roll_no': student.roll_no,
         'branch': student.branch,
         'cgpa': student.cgpa,
-        'graduation_year': student.graduation_year
+        'graduation_year': student.graduation_year,
+        'resume_link': student.resume_link or ''
     }), 200
 
 @api_bp.route('/drives', methods=['GET'])

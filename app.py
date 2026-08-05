@@ -3,7 +3,6 @@ from flask_jwt_extended import JWTManager
 from flask_caching import Cache
 from config import Config
 from models import db, User
-from routes import api_bp
 
 cache = Cache()
 jwt = JWTManager()
@@ -16,6 +15,7 @@ def create_app():
     jwt.init_app(app)
     cache.init_app(app)
     
+    from routes import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
 
     # Initialize the database and create admin

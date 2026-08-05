@@ -1,6 +1,9 @@
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 
 const app = createApp({
+    compilerOptions: {
+        delimiters: ['[[', ']]']
+    },
     setup() {
         const currentView = ref('login');
         const token = ref(localStorage.getItem('jwt_token') || '');
@@ -12,12 +15,17 @@ const app = createApp({
         const regRole = ref('student');
         const regForm = ref({});
         const driveForm = ref({ job_title: '', job_description: '', min_cgpa: '', eligible_branches: '', deadline: '' });
+        
+        // Search & Filters
+        const adminCompanySearch = ref('');
+        const adminStudentSearch = ref('');
+        const studentDriveSearch = ref('');
 
         // Data Models
         const adminStats = ref({});
-        const adminData = ref({ companies: [], drives: [] });
+        const adminData = ref({ companies: [], drives: [], students: [] });
         const companyData = ref({ drives: [], applications: [], selectedDriveId: null });
-        const studentData = ref({ drives: [], applications: [] });
+        const studentData = ref({ profile: {}, drives: [], applications: [] });
 
         const showAlert = (msg) => {
             alertMessage.value = msg;
@@ -116,6 +124,9 @@ const app = createApp({
                 res = await fetch('/api/admin/companies', { headers: authHeaders() });
                 if (res.ok) adminData.value.companies = await res.json();
                 
+                res = await fetch('/api/admin/students', { headers: authHeaders() });
+                if (res.ok) adminData.value.students = await res.json();
+                
                 res = await fetch('/api/admin/drives', { headers: authHeaders() });
                 if (res.ok) adminData.value.drives = await res.json();
             } catch (err) {
@@ -139,6 +150,22 @@ const app = createApp({
             }
         };
 
+        const updateStudentStatus = async (studentId, status) => {
+            try {
+                const res = await fetch(`/api/admin/students/${studentId}/status`, {
+                    method: 'PUT',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ status })
+                });
+                if (res.ok) {
+                    showAlert(`Student ${status}`);
+                    fetchAdminData();
+                }
+            } catch (err) {
+                showAlert('Failed to update status');
+            }
+        };
+
         const updateDriveStatus = async (driveId, status) => {
             try {
                 const res = await fetch(`/api/admin/drives/${driveId}/status`, {
@@ -154,6 +181,17 @@ const app = createApp({
                 showAlert('Failed to update status');
             }
         };
+
+        // Computed for Search
+        const filteredCompanies = computed(() => {
+            if (!adminCompanySearch.value) return adminData.value.companies;
+            return adminData.value.companies.filter(c => c.company_name.toLowerCase().includes(adminCompanySearch.value.toLowerCase()));
+        });
+        
+        const filteredStudents = computed(() => {
+            if (!adminStudentSearch.value) return adminData.value.students;
+            return adminData.value.students.filter(s => s.full_name.toLowerCase().includes(adminStudentSearch.value.toLowerCase()) || s.roll_no.includes(adminStudentSearch.value));
+        });
 
         // --- COMPANY ---
 
@@ -175,10 +213,13 @@ const app = createApp({
                     headers: authHeaders(),
                     body: JSON.stringify(driveForm.value)
                 });
+                const data = await res.json();
                 if (res.ok) {
-                    showAlert('Drive created, pending approval');
+                    showAlert(data.message || 'Drive created');
                     driveForm.value = { job_title: '', job_description: '', min_cgpa: '', eligible_branches: '', deadline: '' };
                     fetchCompanyData();
+                } else {
+                    showAlert(data.message || 'Error creating drive');
                 }
             } catch (err) {
                 showAlert('Failed to create drive');
@@ -217,6 +258,22 @@ const app = createApp({
             }
         };
 
+        const generateOfferLetter = async (appId) => {
+            try {
+                const res = await fetch(`/api/company/applications/${appId}/offer_letter`, { headers: authHeaders() });
+                if (res.ok) {
+                    const html = await res.text();
+                    const newWindow = window.open();
+                    newWindow.document.write(html);
+                    newWindow.document.close();
+                } else {
+                    showAlert('Failed to generate offer letter');
+                }
+            } catch (err) {
+                showAlert('Failed to generate offer letter');
+            }
+        };
+
         // --- STUDENT ---
 
         const fetchStudentData = async () => {
@@ -227,6 +284,31 @@ const app = createApp({
                 }
             } catch (err) {
                 showAlert('Failed to fetch drives');
+            }
+        };
+        
+        const fetchStudentProfile = async () => {
+            try {
+                const res = await fetch('/api/student/profile', { headers: authHeaders() });
+                if (res.ok) {
+                    studentData.value.profile = await res.json();
+                }
+            } catch (err) {
+                showAlert('Failed to fetch profile');
+            }
+        };
+        
+        const updateStudentProfile = async () => {
+            try {
+                const res = await fetch('/api/student/profile', {
+                    method: 'PUT',
+                    headers: authHeaders(),
+                    body: JSON.stringify(studentData.value.profile)
+                });
+                const data = await res.json();
+                showAlert(data.message);
+            } catch (err) {
+                showAlert('Failed to update profile');
             }
         };
 
@@ -267,6 +349,15 @@ const app = createApp({
                 showAlert('Failed to start export task');
             }
         };
+        
+        // Computed for Search
+        const filteredDrives = computed(() => {
+            if (!studentDriveSearch.value) return studentData.value.drives;
+            return studentData.value.drives.filter(d => 
+                d.job_title.toLowerCase().includes(studentDriveSearch.value.toLowerCase()) || 
+                d.company_name.toLowerCase().includes(studentDriveSearch.value.toLowerCase())
+            );
+        });
 
         onMounted(() => {
             if (token.value) {
@@ -277,11 +368,13 @@ const app = createApp({
         return {
             currentView, token, role, alertMessage, 
             loginForm, regRole, regForm, driveForm,
+            adminCompanySearch, adminStudentSearch, studentDriveSearch,
             adminStats, adminData, companyData, studentData,
+            filteredCompanies, filteredStudents, filteredDrives,
             login, logout, registerStudent, registerCompany,
-            fetchAdminData, updateCompanyStatus, updateDriveStatus,
-            fetchCompanyData, createDrive, viewApplicants, updateApplicationStatus,
-            fetchStudentData, fetchStudentApplications, applyDrive, exportCSV
+            fetchAdminData, updateCompanyStatus, updateStudentStatus, updateDriveStatus,
+            fetchCompanyData, createDrive, viewApplicants, updateApplicationStatus, generateOfferLetter,
+            fetchStudentData, fetchStudentProfile, updateStudentProfile, fetchStudentApplications, applyDrive, exportCSV
         }
     }
 });
