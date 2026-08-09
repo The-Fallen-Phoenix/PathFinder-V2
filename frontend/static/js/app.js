@@ -119,7 +119,10 @@ const app = createApp({
         const fetchAdminData = async () => {
             try {
                 let res = await fetch('/api/admin/dashboard', { headers: authHeaders() });
-                if (res.ok) adminStats.value = await res.json();
+                if (res.ok) {
+                    adminStats.value = await res.json();
+                    setTimeout(() => renderAdminChart(), 100);
+                }
                 
                 res = await fetch('/api/admin/companies', { headers: authHeaders() });
                 if (res.ok) adminData.value.companies = await res.json();
@@ -260,7 +263,7 @@ const app = createApp({
 
         const generateOfferLetter = async (appId) => {
             try {
-                const res = await fetch(`/api/company/applications/${appId}/offer_letter`, { headers: authHeaders() });
+                const res = await fetch(`/api/applications/${appId}/offer_letter`, { headers: authHeaders() });
                 if (res.ok) {
                     const html = await res.text();
                     const newWindow = window.open();
@@ -314,6 +317,9 @@ const app = createApp({
 
         const fetchStudentApplications = async () => {
             try {
+                // Pre-fetch profile so student details are populated in HTML/PDF reports
+                fetchStudentProfile();
+                
                 const res = await fetch('/api/student/applications', { headers: authHeaders() });
                 if (res.ok) {
                     studentData.value.applications = await res.json();
@@ -342,8 +348,41 @@ const app = createApp({
                     method: 'POST',
                     headers: authHeaders()
                 });
+                const data = await res.json();
                 if (res.ok) {
-                    showAlert('Export task started successfully! You will receive a notification.');
+                    showAlert('Export task started successfully! Please wait...');
+                    
+                    // Poll the status endpoint until success or failure
+                    const interval = setInterval(async () => {
+                        try {
+                            const statusRes = await fetch(`/api/export/status/${data.task_id}`, {
+                                headers: authHeaders()
+                            });
+                            if (statusRes.ok) {
+                                const statusData = await statusRes.json();
+                                if (statusData.status === 'SUCCESS') {
+                                    clearInterval(interval);
+                                    showAlert('Export complete! Downloading file...');
+                                    
+                                    // Create a temporary hidden link to trigger the download
+                                    const link = document.createElement('a');
+                                    link.href = statusData.download_url;
+                                    link.setAttribute('download', `applications_export.csv`);
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                } else if (statusData.status === 'FAILURE') {
+                                    clearInterval(interval);
+                                    showAlert('Export failed: ' + (statusData.error || 'unknown error'));
+                                }
+                            }
+                        } catch (err) {
+                            clearInterval(interval);
+                            showAlert('Error checking export status');
+                        }
+                    }, 1000);
+                } else {
+                    showAlert(data.message || 'Failed to start export');
                 }
             } catch (err) {
                 showAlert('Failed to start export task');
@@ -358,6 +397,160 @@ const app = createApp({
                 d.company_name.toLowerCase().includes(studentDriveSearch.value.toLowerCase())
             );
         });
+
+        // --- CHARTS & REPORTS GENERATION ---
+        let adminChartInstance = null;
+        
+        const renderAdminChart = () => {
+            const ctx = document.getElementById('adminChart');
+            if (!ctx) return;
+            
+            if (adminChartInstance) {
+                adminChartInstance.destroy();
+            }
+            
+            adminChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Students', 'Companies', 'Jobs Posted', 'Applications'],
+                    datasets: [{
+                        label: 'Stats Count',
+                        data: [
+                            adminStats.value.total_students || 0,
+                            adminStats.value.total_companies || 0,
+                            adminStats.value.total_jobs || 0,
+                            adminStats.value.total_applications || 0
+                        ],
+                        backgroundColor: 'rgba(13, 76, 148, 0.7)',
+                        borderColor: '#0d4c94',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        };
+
+        const downloadAdminReport = async (format) => {
+            try {
+                const res = await fetch('/api/admin/monthly_report', { headers: authHeaders() });
+                if (res.ok) {
+                    const html = await res.text();
+                    if (format === 'html') {
+                        const win = window.open();
+                        win.document.write(html);
+                        win.document.close();
+                    } else if (format === 'pdf') {
+                        const element = document.createElement('div');
+                        element.innerHTML = html;
+                        html2pdf().from(element).set({
+                            margin: 0.5,
+                            filename: `monthly_placement_report_${Date.now()}.pdf`,
+                            image: { type: 'jpeg', quality: 0.98 },
+                            html2canvas: { scale: 2 },
+                            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                        }).save();
+                    }
+                } else {
+                    showAlert('Failed to generate report');
+                }
+            } catch (err) {
+                showAlert('Failed to generate report');
+            }
+        };
+
+        const downloadStudentReport = (format) => {
+            const profile = studentData.value.profile || {};
+            const apps = studentData.value.applications || [];
+            
+            let htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Applications Report - ${profile.full_name || 'Student'}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; color: #000; background-color: #ffffff; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border: 2px solid #000; }
+                    .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
+                    h2 { color: #000; margin: 0 0 5px 0; text-transform: uppercase; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #000; }
+                    th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; font-weight: bold; color: #000; }
+                    .badge { padding: 3px 6px; border: 1px solid #000; font-weight: bold; color: white; font-size: 11px; display: inline-block; text-transform: uppercase; }
+                    .selected { background-color: #27ae60; }
+                    .rejected { background-color: #c0392b; }
+                    .shortlisted { background-color: #f1c40f; color: #000; }
+                    .applied { background-color: #2980b9; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2>Placement Applications Report</h2>
+                        <p style="margin: 5px 0;"><strong>Student Name:</strong> ${profile.full_name || 'N/A'}</p>
+                        <p style="margin: 5px 0;"><strong>Roll Number:</strong> ${profile.roll_no || 'N/A'} | <strong>Branch:</strong> ${profile.branch || 'N/A'}</p>
+                        <p style="margin: 5px 0;"><strong>CGPA:</strong> ${profile.cgpa || 'N/A'}</p>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Company</th>
+                                <th>Job Title</th>
+                                <th>Applied On</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            if (apps.length === 0) {
+                htmlContent += `<tr><td colspan="4" style="text-align:center; color:#999;">No applications submitted yet.</td></tr>`;
+            } else {
+                apps.forEach(a => {
+                    const statusClass = a.status.toLowerCase();
+                    htmlContent += `
+                        <tr>
+                            <td><strong>${a.company_name}</strong></td>
+                            <td>${a.job_title}</td>
+                            <td>${a.applied_on}</td>
+                            <td><span class="badge ${statusClass}">${a.status}</span></td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            htmlContent += `
+                        </tbody>
+                    </table>
+                </div>
+            </body>
+            </html>
+            `;
+            
+            if (format === 'html') {
+                const win = window.open();
+                win.document.write(htmlContent);
+                win.document.close();
+            } else if (format === 'pdf') {
+                const element = document.createElement('div');
+                element.innerHTML = htmlContent;
+                html2pdf().from(element).set({
+                    margin: 0.5,
+                    filename: `applications_report_${profile.roll_no || 'export'}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                }).save();
+            }
+        };
 
         onMounted(() => {
             if (token.value) {
@@ -374,7 +567,8 @@ const app = createApp({
             login, logout, registerStudent, registerCompany,
             fetchAdminData, updateCompanyStatus, updateStudentStatus, updateDriveStatus,
             fetchCompanyData, createDrive, viewApplicants, updateApplicationStatus, generateOfferLetter,
-            fetchStudentData, fetchStudentProfile, updateStudentProfile, fetchStudentApplications, applyDrive, exportCSV
+            fetchStudentData, fetchStudentProfile, updateStudentProfile, fetchStudentApplications, applyDrive, exportCSV,
+            downloadAdminReport, downloadStudentReport, renderAdminChart
         }
     }
 });

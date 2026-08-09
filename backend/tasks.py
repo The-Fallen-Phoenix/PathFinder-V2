@@ -22,6 +22,7 @@ def send_daily_reminders():
 
 @celery_app.task(name='tasks.generate_monthly_report')
 def generate_monthly_report():
+    from flask import current_app
     # Admin monthly report logic
     drives_conducted = PlacementDrive.query.filter_by(status='closed').count()
     total_applications = Application.query.count()
@@ -43,14 +44,16 @@ def generate_monthly_report():
     # Mocking Email Send
     print(f"[EMAIL SIMULATION] Sending Monthly Report to Admin...\n{report_content}")
     
-    # Optional: Write to a file to show it was generated
-    with open('static/monthly_report.html', 'w') as f:
+    filepath = os.path.join(current_app.static_folder, 'monthly_report.html')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, 'w') as f:
         f.write(report_content)
         
     return "Monthly Report Generated and Saved"
 
 @celery_app.task
 def export_applications_csv(student_id):
+    from flask import current_app
     student = User.query.get(student_id)
     if not student or student.role != 'student':
         return "Invalid student"
@@ -58,7 +61,10 @@ def export_applications_csv(student_id):
     apps = Application.query.filter_by(student_id=student.student_profile.id).all()
     
     filename = f"applications_export_{student_id}.csv"
-    filepath = os.path.join('static', filename)
+    filepath = os.path.join(current_app.static_folder, filename)
+    
+    # Ensure target static directory exists
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     
     with open(filepath, 'w', newline='') as csvfile:
         fieldnames = ['Student ID', 'Company Name', 'Drive Title', 'Application Status', 'Date']

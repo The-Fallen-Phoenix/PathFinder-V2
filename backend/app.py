@@ -1,12 +1,7 @@
 from flask import Flask, render_template
-from flask_jwt_extended import JWTManager
-from flask_caching import Cache
 from config import Config
 from models.schema import db, User
-
-# Initialize our extensions (Database, Caching, and Authentication)
-cache = Cache()
-jwt = JWTManager()
+from extensions import cache, jwt
 
 def create_app():
     # 1. Initialize the Flask application

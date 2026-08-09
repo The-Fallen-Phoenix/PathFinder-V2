@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models.schema import db, User, CompanyProfile, StudentProfile, PlacementDrive, Application
-from app import cache
+from extensions import cache
 from datetime import datetime
 
 api_bp = Blueprint('api', __name__)
@@ -197,8 +197,92 @@ def update_drive_status(drive_id):
     if drive:
         drive.status = data['status']
         db.session.commit()
+        cache.clear()  # Clear cache so student dashboard gets updated list
         return jsonify({'message': 'Drive status updated'}), 200
     return jsonify({'message': 'Drive not found'}), 404
+
+@api_bp.route('/admin/monthly_report', methods=['GET'])
+@jwt_required()
+def get_monthly_report():
+    import json
+    current_user = json.loads(get_jwt_identity())
+    if current_user['role'] != 'admin':
+        return "Unauthorized", 403
+        
+    total_students = StudentProfile.query.count()
+    total_companies = CompanyProfile.query.count()
+    total_jobs = PlacementDrive.query.count()
+    total_applications = Application.query.count()
+    selected_students = Application.query.filter_by(status='selected').count()
+    shortlisted_students = Application.query.filter_by(status='shortlisted').count()
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Monthly Placement Activity Report</title>
+        <style>
+            body { font-family: Arial, Helvetica, sans-serif; padding: 20px; color: #000; background-color: #ffffff; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border: 2px solid #000; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .title { font-size: 20px; font-weight: bold; color: #000; text-transform: uppercase; margin: 0; }
+            .date { font-size: 12px; color: #555; margin-top: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .report-footer { margin-top: 30px; text-align: center; font-size: 11px; color: #555; border-top: 1px solid #000; padding-top: 10px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="title">Monthly Placement Activity Report</div>
+                <div class="date">Generated on: {datetime.now().strftime('%B %d, %Y')}</div>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric Description</th>
+                        <th>Registered Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Total Registered Students</td>
+                        <td><strong>{total_students}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Total Partner Companies</td>
+                        <td><strong>{total_companies}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Total Placement Drives</td>
+                        <td><strong>{total_jobs}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Total Applications Received</td>
+                        <td><strong>{total_applications}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Total Students Selected</td>
+                        <td><strong>{selected_students}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Total Students Shortlisted</td>
+                        <td><strong>{shortlisted_students}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="report-footer">
+                PathFinder Placement Portal - Activity Document
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content, 200
 
 
 # ==========================================
@@ -295,21 +379,29 @@ def update_application_status(app_id):
             return jsonify({'message': 'Application status updated'}), 200
     return jsonify({'message': 'Application not found'}), 404
 
-@api_bp.route('/company/applications/<int:app_id>/offer_letter', methods=['GET'])
+@api_bp.route('/applications/<int:app_id>/offer_letter', methods=['GET'])
 @jwt_required()
 def generate_offer_letter(app_id):
     import json
     current_user = json.loads(get_jwt_identity())
-    if current_user['role'] != 'company':
-        return "Unauthorized", 403
-        
+    
     app = Application.query.get(app_id)
     if not app or app.status != 'selected':
         return "Application not selected or not found", 404
         
-    company = CompanyProfile.query.filter_by(user_id=current_user['id']).first()
-    if app.drive.company_id != company.id:
+    # Allow company who posted the drive OR student who is selected
+    if current_user['role'] == 'company':
+        company = CompanyProfile.query.filter_by(user_id=current_user['id']).first()
+        if not company or app.drive.company_id != company.id:
+            return "Unauthorized", 403
+    elif current_user['role'] == 'student':
+        student = StudentProfile.query.filter_by(user_id=current_user['id']).first()
+        if not student or app.student_id != student.id:
+            return "Unauthorized", 403
+    else:
         return "Unauthorized", 403
+
+    company = CompanyProfile.query.get(app.drive.company_id)
 
     html_content = f"""
     <!DOCTYPE html>
@@ -482,3 +574,24 @@ def trigger_export():
     from tasks import export_applications_csv
     task = export_applications_csv.delay(current_user['id'])
     return jsonify({'message': 'Export started', 'task_id': task.id}), 202
+
+@api_bp.route('/export/status/<task_id>', methods=['GET'])
+@jwt_required()
+def get_export_status(task_id):
+    import json
+    current_user = json.loads(get_jwt_identity())
+    if current_user['role'] != 'student':
+        return jsonify({'message': 'Unauthorized'}), 403
+        
+    from celery.result import AsyncResult
+    from celery_worker import celery_app
+    
+    res = AsyncResult(task_id, app=celery_app)
+    if res.ready():
+        if res.failed():
+            return jsonify({'status': 'FAILURE', 'error': str(res.result)}), 500
+        filename = f"applications_export_{current_user['id']}.csv"
+        download_url = f"/static/{filename}"
+        return jsonify({'status': 'SUCCESS', 'download_url': download_url}), 200
+        
+    return jsonify({'status': 'PENDING'}), 200

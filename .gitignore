@@ -9,3 +9,5 @@ venv/
 env/
 *.log
 Importantruncommands.txt
+celerybeat-schedule*
+frontend/static/*.csv
