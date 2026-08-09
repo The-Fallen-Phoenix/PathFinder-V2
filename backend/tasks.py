@@ -1,5 +1,5 @@
 from celery_worker import celery_app
-from models import db, User, Application, PlacementDrive
+from models.schema import db, User, Application, PlacementDrive
 from datetime import datetime, timedelta
 import csv
 import os

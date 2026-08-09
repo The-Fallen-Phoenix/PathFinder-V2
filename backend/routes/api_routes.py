@@ -1,10 +1,16 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from models import db, User, CompanyProfile, StudentProfile, PlacementDrive, Application
+from models.schema import db, User, CompanyProfile, StudentProfile, PlacementDrive, Application
 from app import cache
 from datetime import datetime
 
 api_bp = Blueprint('api', __name__)
+
+# ==========================================
+# 1. AUTHENTICATION & REGISTRATION APIs
+# ==========================================
+# These routes handle logging in and creating new accounts.
+# They do not require a JWT token to access.
 
 @api_bp.route('/login', methods=['POST'])
 def login():
@@ -17,7 +23,8 @@ def login():
         if user.status != 'approved':
             return jsonify({'message': f'Account is {user.status}'}), 403
         
-        access_token = create_access_token(identity={'id': user.id, 'role': user.role})
+        import json
+        access_token = create_access_token(identity=json.dumps({'id': user.id, 'role': user.role}))
         return jsonify(access_token=access_token, role=user.role), 200
 
     return jsonify({'message': 'Invalid credentials'}), 401
@@ -68,12 +75,19 @@ def register_company():
 
     return jsonify({'message': 'Company registered, pending admin approval'}), 201
 
-# --- Admin APIs ---
+# ==========================================
+# 2. ADMIN APIs
+# ==========================================
+# These routes are strictly for the Administrator.
+# Notice the `@jwt_required()` decorator: this means a user must be logged in.
+# Inside each function, we check `current_user['role'] != 'admin'` to ensure only admins can access them.
+
 
 @api_bp.route('/admin/dashboard', methods=['GET'])
 @jwt_required()
 def admin_dashboard():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     
@@ -92,7 +106,8 @@ def admin_dashboard():
 @api_bp.route('/admin/companies', methods=['GET'])
 @jwt_required()
 def get_companies():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     companies = CompanyProfile.query.all()
@@ -108,7 +123,8 @@ def get_companies():
 @api_bp.route('/admin/companies/<int:company_id>/status', methods=['PUT'])
 @jwt_required()
 def update_company_status(company_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     data = request.get_json()
@@ -122,7 +138,8 @@ def update_company_status(company_id):
 @api_bp.route('/admin/students', methods=['GET'])
 @jwt_required()
 def get_students():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     students = StudentProfile.query.all()
@@ -139,7 +156,8 @@ def get_students():
 @api_bp.route('/admin/students/<int:student_id>/status', methods=['PUT'])
 @jwt_required()
 def update_student_status(student_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     data = request.get_json()
@@ -153,7 +171,8 @@ def update_student_status(student_id):
 @api_bp.route('/admin/drives', methods=['GET'])
 @jwt_required()
 def get_all_drives():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     drives = PlacementDrive.query.all()
@@ -169,7 +188,8 @@ def get_all_drives():
 @api_bp.route('/admin/drives/<int:drive_id>/status', methods=['PUT'])
 @jwt_required()
 def update_drive_status(drive_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'admin':
         return jsonify({'message': 'Unauthorized'}), 403
     data = request.get_json()
@@ -181,12 +201,18 @@ def update_drive_status(drive_id):
     return jsonify({'message': 'Drive not found'}), 404
 
 
-# --- Company APIs ---
+# ==========================================
+# 3. COMPANY APIs
+# ==========================================
+# These routes handle company-specific actions (creating drives, viewing applicants).
+# They ensure that the company profile is 'approved' before allowing them to post jobs.
+
 
 @api_bp.route('/company/drives', methods=['GET', 'POST'])
 @jwt_required()
 def company_drives():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'company':
         return jsonify({'message': 'Unauthorized'}), 403
     
@@ -226,7 +252,8 @@ def company_drives():
 @api_bp.route('/company/drives/<int:drive_id>/applications', methods=['GET'])
 @jwt_required()
 def company_drive_applications(drive_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'company':
         return jsonify({'message': 'Unauthorized'}), 403
     
@@ -252,7 +279,8 @@ def company_drive_applications(drive_id):
 @api_bp.route('/company/applications/<int:app_id>/status', methods=['PUT'])
 @jwt_required()
 def update_application_status(app_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'company':
         return jsonify({'message': 'Unauthorized'}), 403
         
@@ -270,7 +298,8 @@ def update_application_status(app_id):
 @api_bp.route('/company/applications/<int:app_id>/offer_letter', methods=['GET'])
 @jwt_required()
 def generate_offer_letter(app_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'company':
         return "Unauthorized", 403
         
@@ -330,12 +359,19 @@ def generate_offer_letter(app_id):
     return html_content, 200
 
 
-# --- Student APIs ---
+# ==========================================
+# 4. STUDENT APIs
+# ==========================================
+# These routes handle student-specific actions (viewing drives, applying, viewing history).
+# Notice the `@cache.cached()` decorator on `get_drives`: it stores the result in memory 
+# so we don't query the database every single time a student refreshes the page!
+
 
 @api_bp.route('/student/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def student_profile():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'student':
         return jsonify({'message': 'Unauthorized'}), 403
         
@@ -380,7 +416,8 @@ def get_drives():
 @api_bp.route('/drives/<int:drive_id>/apply', methods=['POST'])
 @jwt_required()
 def apply_to_drive(drive_id):
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'student':
         return jsonify({'message': 'Unauthorized'}), 403
         
@@ -410,7 +447,8 @@ def apply_to_drive(drive_id):
 @api_bp.route('/student/applications', methods=['GET'])
 @jwt_required()
 def student_applications():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'student':
         return jsonify({'message': 'Unauthorized'}), 403
         
@@ -426,12 +464,18 @@ def student_applications():
     } for a in apps]
     return jsonify(res), 200
 
-# --- Celery Trigger APIs ---
+# ==========================================
+# 5. CELERY ASYNCHRONOUS TASKS
+# ==========================================
+# These routes trigger background jobs. Instead of doing the heavy work immediately
+# and freezing the server, they use `.delay()` to send the task to Redis/Celery.
+
 
 @api_bp.route('/export/applications', methods=['POST'])
 @jwt_required()
 def trigger_export():
-    current_user = get_jwt_identity()
+    import json
+    current_user = json.loads(get_jwt_identity())
     if current_user['role'] != 'student':
         return jsonify({'message': 'Unauthorized'}), 403
         
