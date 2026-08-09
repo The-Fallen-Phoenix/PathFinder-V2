@@ -262,7 +262,10 @@
                 <!-- Login View -->
                 <div v-if="currentView === 'login'">
                     <div class="card" style="max-width: 450px; margin: 40px auto;">
-                        <h2 class="text-center mb-4" style="color: var(--primary-color);">Welcome Back</h2>
+                        <div class="text-center mb-3">
+                            <img src="/static/img/PathFinder.png" alt="PathFinder Logo" style="height: 65px; width: auto;">
+                        </div>
+                        <h2 class="text-center mb-4" style="color: var(--primary-color); margin-top: 5px;">Welcome</h2>
                         <form @submit.prevent="login">
                             <div class="mb-3">
                                 <label class="form-label">Username</label>

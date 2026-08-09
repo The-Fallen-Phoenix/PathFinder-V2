@@ -2,7 +2,10 @@
   <div class="login-container">
     <!-- Login View -->
     <div v-if="currentView === 'login'" class="card">
-      <h2>Welcome Back</h2>
+      <div style="text-align: center; margin-bottom: 15px;">
+        <img src="/static/img/PathFinder.png" alt="PathFinder Logo" style="height: 65px; width: auto;" />
+      </div>
+      <h2 style="text-align: center;">Welcome</h2>
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label>Username</label>
