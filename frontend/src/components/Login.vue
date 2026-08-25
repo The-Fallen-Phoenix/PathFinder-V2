@@ -1,6 +1,6 @@
 <template>
   <div class="login-container">
-    <!-- Login View -->
+    <!-- Login -->
     <div v-if="currentView === 'login'" class="card">
       <div style="text-align: center; margin-bottom: 15px;">
         <img src="/static/img/PathFinder.png" alt="PathFinder Logo" style="height: 65px; width: auto;" />
@@ -19,7 +19,7 @@
       </form>
     </div>
 
-    <!-- Register View -->
+    <!-- Register -->
     <div v-else-if="currentView === 'register'" class="card">
       <h2>Create an Account</h2>
       <div class="btn-group">
@@ -32,6 +32,7 @@
         <input type="text" class="form-control" v-model="regForm.username" placeholder="Username" required />
         <input type="password" class="form-control" v-model="regForm.password" placeholder="Password" required />
         <input type="text" class="form-control" v-model="regForm.full_name" placeholder="Full Name" required />
+        <input type="email" class="form-control" v-model="regForm.email" placeholder="Email" required />
         <input type="text" class="form-control" v-model="regForm.roll_no" placeholder="Roll No" required />
         <input type="text" class="form-control" v-model="regForm.branch" placeholder="Branch" required />
         <input type="number" step="0.01" class="form-control" v-model="regForm.cgpa" placeholder="CGPA" required />

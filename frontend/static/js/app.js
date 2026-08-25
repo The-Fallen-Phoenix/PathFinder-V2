@@ -445,19 +445,39 @@ const app = createApp({
                 if (res.ok) {
                     const html = await res.text();
                     if (format === 'html') {
-                        const win = window.open();
-                        win.document.write(html);
-                        win.document.close();
+                        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        const win = window.open(blobUrl, '_blank');
+                        if (!win) {
+                            const a = document.createElement('a');
+                            a.href = blobUrl;
+                            a.target = '_blank';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
                     } else if (format === 'pdf') {
                         const element = document.createElement('div');
                         element.innerHTML = html;
-                        html2pdf().from(element).set({
-                            margin: 0.5,
-                            filename: `monthly_placement_report_${Date.now()}.pdf`,
-                            image: { type: 'jpeg', quality: 0.98 },
-                            html2canvas: { scale: 2 },
-                            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-                        }).save();
+                        document.body.appendChild(element);
+                        if (typeof html2pdf !== 'undefined') {
+                            html2pdf().from(element).set({
+                                margin: 0.5,
+                                filename: `monthly_placement_report_${Date.now()}.pdf`,
+                                image: { type: 'jpeg', quality: 0.98 },
+                                html2canvas: { scale: 2 },
+                                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                            }).save().then(() => {
+                                document.body.removeChild(element);
+                            }).catch(() => {
+                                document.body.removeChild(element);
+                            });
+                        } else {
+                            const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            window.open(blobUrl, '_blank');
+                            document.body.removeChild(element);
+                        }
                     }
                 } else {
                     showAlert('Failed to generate report');
@@ -536,19 +556,39 @@ const app = createApp({
             `;
             
             if (format === 'html') {
-                const win = window.open();
-                win.document.write(htmlContent);
-                win.document.close();
+                const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                const blobUrl = URL.createObjectURL(blob);
+                const win = window.open(blobUrl, '_blank');
+                if (!win) {
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.target = '_blank';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
             } else if (format === 'pdf') {
                 const element = document.createElement('div');
                 element.innerHTML = htmlContent;
-                html2pdf().from(element).set({
-                    margin: 0.5,
-                    filename: `applications_report_${profile.roll_no || 'export'}.pdf`,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2 },
-                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-                }).save();
+                document.body.appendChild(element);
+                if (typeof html2pdf !== 'undefined') {
+                    html2pdf().from(element).set({
+                        margin: 0.5,
+                        filename: `applications_report_${profile.roll_no || 'export'}.pdf`,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2 },
+                        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                    }).save().then(() => {
+                        document.body.removeChild(element);
+                    }).catch(() => {
+                        document.body.removeChild(element);
+                    });
+                } else {
+                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    window.open(blobUrl, '_blank');
+                    document.body.removeChild(element);
+                }
             }
         };
 

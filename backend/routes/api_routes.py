@@ -6,12 +6,6 @@ from datetime import datetime
 
 api_bp = Blueprint('api', __name__)
 
-# ==========================================
-# 1. AUTHENTICATION & REGISTRATION APIs
-# ==========================================
-# These routes handle logging in and creating new accounts.
-# They do not require a JWT token to access.
-
 @api_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -35,7 +29,12 @@ def register_student():
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'message': 'Username already exists'}), 400
     
-    new_user = User(username=data['username'], role='student', status='approved')
+    new_user = User(
+        username=data["username"],
+        email=data.get("email"),
+        role="student",
+        status="approved"
+    )
     new_user.set_password(data['password'])
     db.session.add(new_user)
     db.session.commit()
@@ -74,14 +73,6 @@ def register_company():
     db.session.commit()
 
     return jsonify({'message': 'Company registered, pending admin approval'}), 201
-
-# ==========================================
-# 2. ADMIN APIs
-# ==========================================
-# These routes are strictly for the Administrator.
-# Notice the `@jwt_required()` decorator: this means a user must be logged in.
-# Inside each function, we check `current_user['role'] != 'admin'` to ensure only admins can access them.
-
 
 @api_bp.route('/admin/dashboard', methods=['GET'])
 @jwt_required()
@@ -146,10 +137,11 @@ def get_students():
     res = [{
         'id': s.id,
         'full_name': s.full_name,
+        'email': s.user.email if s.user else '',
         'roll_no': s.roll_no,
         'branch': s.branch,
         'cgpa': s.cgpa,
-        'status': s.user.status
+        'status': s.user.status if s.user else ''
     } for s in students]
     return jsonify(res), 200
 
@@ -197,7 +189,7 @@ def update_drive_status(drive_id):
     if drive:
         drive.status = data['status']
         db.session.commit()
-        cache.clear()  # Clear cache so student dashboard gets updated list
+        cache.clear()
         return jsonify({'message': 'Drive status updated'}), 200
     return jsonify({'message': 'Drive not found'}), 404
 
@@ -222,15 +214,15 @@ def get_monthly_report():
     <head>
         <title>Monthly Placement Activity Report</title>
         <style>
-            body { font-family: Arial, Helvetica, sans-serif; padding: 20px; color: #000; background-color: #ffffff; }
-            .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border: 2px solid #000; }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-            .title { font-size: 20px; font-weight: bold; color: #000; text-transform: uppercase; margin: 0; }
-            .date { font-size: 12px; color: #555; margin-top: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .report-footer { margin-top: 30px; text-align: center; font-size: 11px; color: #555; border-top: 1px solid #000; padding-top: 10px; }
+            body {{ font-family: Arial, Helvetica, sans-serif; padding: 20px; color: #000; background-color: #ffffff; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 20px; border: 2px solid #000; }}
+            .header {{ text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }}
+            .title {{ font-size: 20px; font-weight: bold; color: #000; text-transform: uppercase; margin: 0; }}
+            .date {{ font-size: 12px; color: #555; margin-top: 5px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            th, td {{ border: 1px solid #000; padding: 8px; text-align: left; }}
+            th {{ background-color: #f2f2f2; }}
+            .report-footer {{ margin-top: 30px; text-align: center; font-size: 11px; color: #555; border-top: 1px solid #000; padding-top: 10px; }}
         </style>
     </head>
     <body>
@@ -284,14 +276,6 @@ def get_monthly_report():
     """
     return html_content, 200
 
-
-# ==========================================
-# 3. COMPANY APIs
-# ==========================================
-# These routes handle company-specific actions (creating drives, viewing applicants).
-# They ensure that the company profile is 'approved' before allowing them to post jobs.
-
-
 @api_bp.route('/company/drives', methods=['GET', 'POST'])
 @jwt_required()
 def company_drives():
@@ -315,13 +299,12 @@ def company_drives():
             min_cgpa=float(data.get('min_cgpa', 0.0)),
             eligible_branches=data.get('eligible_branches', ''),
             deadline=deadline,
-            status='pending' # Needs admin approval
+            status='pending'
         )
         db.session.add(new_drive)
         db.session.commit()
         return jsonify({'message': 'Drive created, pending approval'}), 201
     
-    # GET drives for this company
     drives = PlacementDrive.query.filter_by(company_id=company.id).all()
     res = [{
         'id': d.id,
@@ -371,7 +354,6 @@ def update_application_status(app_id):
     data = request.get_json()
     app = Application.query.get(app_id)
     if app:
-        # Check if this company owns the drive
         company = CompanyProfile.query.filter_by(user_id=current_user['id']).first()
         if app.drive.company_id == company.id:
             app.status = data['status']
@@ -389,7 +371,6 @@ def generate_offer_letter(app_id):
     if not app or app.status != 'selected':
         return "Application not selected or not found", 404
         
-    # Allow company who posted the drive OR student who is selected
     if current_user['role'] == 'company':
         company = CompanyProfile.query.filter_by(user_id=current_user['id']).first()
         if not company or app.drive.company_id != company.id:
@@ -450,15 +431,6 @@ def generate_offer_letter(app_id):
     """
     return html_content, 200
 
-
-# ==========================================
-# 4. STUDENT APIs
-# ==========================================
-# These routes handle student-specific actions (viewing drives, applying, viewing history).
-# Notice the `@cache.cached()` decorator on `get_drives`: it stores the result in memory 
-# so we don't query the database every single time a student refreshes the page!
-
-
 @api_bp.route('/student/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def student_profile():
@@ -475,11 +447,14 @@ def student_profile():
         student.branch = data.get('branch', student.branch)
         student.cgpa = float(data.get('cgpa', student.cgpa))
         student.resume_link = data.get('resume_link', student.resume_link)
+        if data.get('email') and student.user:
+            student.user.email = data['email']
         db.session.commit()
         return jsonify({'message': 'Profile updated successfully'}), 200
 
     return jsonify({
         'full_name': student.full_name,
+        'email': student.user.email if student.user else '',
         'roll_no': student.roll_no,
         'branch': student.branch,
         'cgpa': student.cgpa,
@@ -491,7 +466,6 @@ def student_profile():
 @jwt_required()
 @cache.cached(timeout=60, query_string=True)
 def get_drives():
-    # Show approved drives
     drives = PlacementDrive.query.filter_by(status='approved').all()
     res = []
     for d in drives:
@@ -519,7 +493,6 @@ def apply_to_drive(drive_id):
     if not drive:
         return jsonify({'message': 'Drive not available'}), 404
         
-    # Check if already applied
     existing_app = Application.query.filter_by(student_id=student.id, drive_id=drive_id).first()
     if existing_app:
         return jsonify({'message': 'Already applied'}), 400
@@ -555,13 +528,6 @@ def student_applications():
         'applied_on': a.applied_on.strftime('%Y-%m-%d')
     } for a in apps]
     return jsonify(res), 200
-
-# ==========================================
-# 5. CELERY ASYNCHRONOUS TASKS
-# ==========================================
-# These routes trigger background jobs. Instead of doing the heavy work immediately
-# and freezing the server, they use `.delay()` to send the task to Redis/Celery.
-
 
 @api_bp.route('/export/applications', methods=['POST'])
 @jwt_required()

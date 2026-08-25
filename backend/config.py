@@ -16,3 +16,11 @@ class Config:
     CACHE_REDIS_PORT = 6379
     CACHE_REDIS_DB = 3
     CACHE_DEFAULT_TIMEOUT = 300
+
+    # Email Settings
+    MAIL_SERVER = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_USE_TLS = True
+    ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "24f3001829@ds.study.iitm.ac.in")

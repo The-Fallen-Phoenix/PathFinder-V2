@@ -2,7 +2,7 @@
   <div class="company-dashboard">
     <h2>Company Dashboard</h2>
     
-    <!-- Post Drive Form -->
+    <!-- Post Drive -->
     <div class="card">
       <h3>Post a New Job Drive</h3>
       <form @submit.prevent="handleCreateDrive">

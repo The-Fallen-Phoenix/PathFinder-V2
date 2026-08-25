@@ -7,7 +7,7 @@
       <button @click="currentTab = 'profile'">Profile</button>
     </div>
 
-    <!-- Available Drives Tab -->
+    <!-- Available Drives -->
     <div v-if="currentTab === 'drives'">
       <h2>Available Placement Drives</h2>
       <input type="text" v-model="searchQuery" placeholder="Search by company or job..." class="form-control" />
@@ -68,6 +68,9 @@
       <form @submit.prevent="saveProfile" class="card">
         <label>Full Name</label>
         <input type="text" class="form-control" v-model="profile.full_name" required />
+
+        <label>Email</label>
+        <input type="email" class="form-control" v-model="profile.email" required />
         
         <label>Branch</label>
         <input type="text" class="form-control" v-model="profile.branch" required />

@@ -110,7 +110,7 @@
         .stat-card h3 { font-size: 2rem; font-weight: bold; margin: 0; }
         .stat-card p { margin: 5px 0 0 0; color: #555; }
 
-        /* Forms & Inputs */
+        /* Forms */
         .form-label {
             display: block;
             margin-bottom: 3px;
@@ -297,6 +297,7 @@
                             <div style="clear:both;"></div>
                             
                             <div class="mb-3" style="padding: 0 10px;"><input type="text" class="form-control" v-model="regForm.full_name" placeholder="Full Name" required></div>
+                            <div class="mb-3" style="padding: 0 10px;"><input type="email" class="form-control" v-model="regForm.email" placeholder="Email" required></div>
                             
                             <div class="col-half mb-3"><input type="text" class="form-control" v-model="regForm.roll_no" placeholder="Roll No" required></div>
                             <div class="col-half mb-3"><input type="text" class="form-control" v-model="regForm.branch" placeholder="Branch" required></div>
@@ -543,7 +544,6 @@
                                                 <option value="selected">Select</option>
                                                 <option value="rejected">Reject</option>
                                             </select>
-                                            <!-- Dummy Offer Letter Generator Button -->
                                             <button v-if="app.status === 'selected'" class="btn btn-success btn-sm" style="margin-top: 5px; width: 130px;" @click="generateOfferLetter(app.id)">
                                                 Generate Offer
                                             </button>
@@ -646,15 +646,20 @@
                                 <input type="text" class="form-control" v-model="studentData.profile.full_name" required>
                             </div>
                             <div class="col-half mb-3">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" v-model="studentData.profile.email" required>
+                            </div>
+                            <div style="clear:both;"></div>
+
+                            <div class="col-half mb-3">
                                 <label class="form-label">Roll No (Cannot edit)</label>
                                 <input type="text" class="form-control" :value="studentData.profile.roll_no" disabled style="background:#eee;">
                             </div>
-                            <div style="clear:both;"></div>
-                            
                             <div class="col-half mb-3">
                                 <label class="form-label">Branch</label>
                                 <input type="text" class="form-control" v-model="studentData.profile.branch" required>
                             </div>
+                            <div style="clear:both;"></div>
                             <div class="col-half mb-3">
                                 <label class="form-label">CGPA</label>
                                 <input type="number" step="0.01" class="form-control" v-model="studentData.profile.cgpa" required>
@@ -682,8 +687,6 @@
         </footer>
     </div>
 
-    <!-- No Bootstrap JS required anymore! -->
-    <!-- ChartJS and html2pdf for PDF generation -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="/static/js/app.js"></script>

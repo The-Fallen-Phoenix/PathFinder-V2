@@ -17,15 +17,14 @@ def make_celery(app):
 
     celery.Task = ContextTask
     
-    # Configure Celery Beat Schedule
     celery.conf.beat_schedule = {
         'daily-reminders': {
             'task': 'tasks.send_daily_reminders',
-            'schedule': crontab(hour=9, minute=0), # Every day at 9 AM
+            'schedule': crontab(hour=9, minute=0),
         },
         'monthly-report': {
             'task': 'tasks.generate_monthly_report',
-            'schedule': crontab(0, 0, day_of_month='1'), # 1st day of every month at midnight
+            'schedule': crontab(0, 0, day_of_month='1'),
         }
     }
     celery.conf.timezone = 'UTC'

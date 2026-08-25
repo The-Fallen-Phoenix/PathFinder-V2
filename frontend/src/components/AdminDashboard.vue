@@ -13,7 +13,7 @@
       <div class="col"><div class="card stat-card"><h3>{{ stats.total_applications }}</h3><p>Applications</p></div></div>
     </div>
 
-    <!-- Reports Section -->
+    <!-- Reports -->
     <div class="row">
       <div class="col chart-col">
         <div class="card">
@@ -25,8 +25,8 @@
         <div class="card">
           <h3>Monthly Activity Report</h3>
           <p>Download a summary of student registrations, company partnerships, and drive success rates.</p>
-          <button class="btn btn-primary" @click="$emit('download-report', 'html')">View HTML Report</button>
-          <button class="btn btn-success" @click="$emit('download-report', 'pdf')">Download PDF Report</button>
+          <button class="btn btn-primary" @click="downloadReport('html')">View HTML Report</button>
+          <button class="btn btn-success" @click="downloadReport('pdf')">Download PDF Report</button>
         </div>
       </div>
     </div>
@@ -55,7 +55,7 @@
       </table>
     </div>
 
-    <!-- Drives Management -->
+    <!-- Drives -->
     <div class="card">
       <h3>Placement Drives</h3>
       <table>
@@ -99,6 +99,9 @@ export default {
     },
     updateDrive(id, status) {
       this.$emit('update-drive', { id, status });
+    },
+    downloadReport(format) {
+      this.$emit('download-report', format);
     }
   }
 }
